@@ -97,12 +97,19 @@ rast <- function(inRaster) {
 # 2.1: ACS Data 
 
 ```{r}
-#setting up api key 
+# setting up api key 
 census_api_key("b83a23afee4a8ed0fa131e449869e6577b87151e", overwrite = TRUE, install = TRUE)
 ```
 
 ```{r}
-#pulling data from census for 2011
+# creating list for selected counties
+selected_counties <- c("Bergen County, New Jersey", "Hudson County, New Jersey", "Passaic County, New Jersey" , 
+                       "Middlesex County, New Jersey", "Monmouth County, New Jersey", "Ocean County, New Jersey", 
+                       "Somerset County, New Jersey", "Essex County, New Jersey", "Union County, New Jersey",
+                       "Morris County, New Jersey", "Sussex County, New Jersey", "Hunterdon County, New Jersey",
+                       "Mercer County, New Jersey", "Warren County, New Jersey")
+
+# pulling data from census for 2011
 dat_2011 <- get_acs(geography = "county", 
           variables = c("B01003_001E",
                         "B19013_001E"), 
@@ -112,15 +119,43 @@ dat_2011 <- get_acs(geography = "county",
           output = "wide") %>%
   rename(total_pop = B01003_001E,
          median_hh_income = B19013_001E) %>%
-  dplyr::select(GEOID, NAME, total_pop, median_hh_income, geometry) 
-
-selected_counties <- c("Bergen County, New Jersey", "Hudson County, New Jersey", "Passaic County, New Jersey" , 
-                       "Middlesex County, New Jersey", "Monmouth County, New Jersey", "Ocean County, New Jersey", 
-                       "Somerset County, New Jersey", "Essex County, New Jersey", "Union County, New Jersey",
-                       "Morris County, New Jersey", "Sussex County, New Jersey", "Hunterdon County, New Jersey",
-                       "Mercer County, New Jersey", "Warren County, New Jersey")
-
-dat_2011 <- dat_2011 %>%
+  dplyr::select(GEOID, NAME, total_pop, median_hh_income, geometry) %>%
   filter(NAME %in% selected_counties)
 
+
+
+# pulling data from census for 2021
+dat_2021 <- get_acs(geography = "county", 
+          variables = c("B01003_001E",
+                        "B19013_001E"), 
+          year = 2021, 
+          state = "NJ", 
+          geometry = TRUE, 
+          output = "wide") %>%
+  rename(total_pop = B01003_001E,
+         median_hh_income = B19013_001E) %>%
+  dplyr::select(GEOID, NAME, total_pop, median_hh_income, geometry) %>%
+  filter(NAME %in% selected_counties)
+
+```
+
+## plotting population 
+
+```{r, warning = FALSE, message = FALSE, fig.height= 8, fig.width= 11}
+grid.arrange(
+ggplot() +
+  geom_sf(data = dat_2011, aes(fill=factor(ntile(total_pop,5))), colour=NA) +
+  scale_fill_manual(values = palette5,
+                    labels=quintileBreaks(dat_2011,"total_pop"),
+                   name="Quintile\nBreaks") +
+  labs(title="Population, New Jersey (select counties): 2011") +
+  mapTheme,
+
+ggplot() +
+  geom_sf(data = dat_2021, aes(fill=factor(ntile(total_pop,5))), colour=NA) +
+  scale_fill_manual(values = palette5,
+                    labels=quintileBreaks(dat_2021,"total_pop"),
+                   name="Quintile\nBreaks") +
+  labs(title="Population, New Jersey (select counties): 2021") +
+  mapTheme, ncol=2)
 ```
