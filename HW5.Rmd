@@ -1,29 +1,126 @@
 ---
 title: "Urban Growth Modeling"
-output: html_document
+author: "Javier Fernandez, Lu Yii Wong"
 date: "2024-04-30"
+output: html_document
+
 ---
-
+# 1: Setup 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
-## R Markdown
+```{r load_packages, message=FALSE, warning=FALSE, results = "hide"}
+library(tidyverse)
+library(sf)
+library(raster)
+library(knitr)
+library(kableExtra)
+library(tidycensus)
+library(tigris)
+library(FNN)
+#library(QuantPsyc) # JE Note: in R 4.1, QuantPsyc package not available.
+library(caret)
+library(yardstick)
+library(pscl)
+library(plotROC) 
+library(ggrepel)
+library(pROC)
+library(grid)
+library(gridExtra)
+library(viridis)
+library(igraph)
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+plotTheme <- theme(
+  plot.title =element_text(size=12),
+  plot.subtitle = element_text(size=8),
+  plot.caption = element_text(size = 6),
+  axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+  axis.text.y = element_text(size = 10),
+  axis.title.y = element_text(size = 10),
+  # Set the entire chart region to blank
+  panel.background=element_blank(),
+  plot.background=element_blank(),
+  #panel.border=element_rect(colour="#F0F0F0"),
+  # Format the grid
+  panel.grid.major=element_line(colour="#D0D0D0",size=.75),
+  axis.ticks=element_blank())
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+mapTheme <- theme(plot.title =element_text(size=12),
+                  plot.subtitle = element_text(size=8),
+                  plot.caption = element_text(size = 6),
+                  axis.line=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.text.y=element_blank(),
+                  axis.ticks=element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.title.y=element_blank(),
+                  panel.background=element_blank(),
+                  panel.border=element_blank(),
+                  panel.grid.major=element_line(colour = 'transparent'),
+                  panel.grid.minor=element_blank(),
+                  legend.direction = "vertical", 
+                  legend.position = "right",
+                  plot.margin = margin(1, 1, 1, 1, 'cm'),
+                  legend.key.height = unit(1, "cm"), legend.key.width = unit(0.2, "cm"))
 
-```{r cars}
-summary(cars)
+palette2 <- c("#41b6c4","#253494")
+palette4 <- c("#a1dab4","#41b6c4","#2c7fb8","#253494")
+palette5 <- c("#ffffcc","#a1dab4","#41b6c4","#2c7fb8","#253494")
+palette10 <- c("#f7fcf0","#e0f3db","#ccebc5","#a8ddb5","#7bccc4",
+               "#4eb3d3","#2b8cbe","#0868ac","#084081","#f7fcf0")
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+```{r, warning = FALSE, message = FALSE}
+#this function converts a column in to quintiles. It is used for mapping.
+quintileBreaks <- function(df,variable) {
+    as.character(quantile(df[[variable]],
+                          c(.01,.2,.4,.6,.8),na.rm=T))
+}
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+#This function can be used to convert a polygon sf to centroids xy coords.
+xyC <- function(aPolygonSF) {
+  as.data.frame(
+    cbind(x=st_coordinates(st_centroid(aPolygonSF))[,1],
+          y=st_coordinates(st_centroid(aPolygonSF))[,2]))
+} 
+
+#this function convert a raster to a data frame so it can be plotted in ggplot
+rast <- function(inRaster) {
+  data.frame(
+    xyFromCell(inRaster, 1:ncell(inRaster)), 
+    value = getValues(inRaster)) }
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+# 2: Data Wrangling
+# 2.1: ACS Data 
+
+```{r}
+#setting up api key 
+census_api_key("b83a23afee4a8ed0fa131e449869e6577b87151e", overwrite = TRUE, install = TRUE)
+```
+
+```{r}
+#pulling data from census for 2011
+dat_2011 <- get_acs(geography = "county", 
+          variables = c("B01003_001E",
+                        "B19013_001E"), 
+          year = 2011, 
+          state = "NJ", 
+          geometry = TRUE, 
+          output = "wide") %>%
+  rename(total_pop = B01003_001E,
+         median_hh_income = B19013_001E) %>%
+  dplyr::select(GEOID, NAME, total_pop, median_hh_income, geometry) 
+
+selected_counties <- c("Bergen County, New Jersey", "Hudson County, New Jersey", "Passaic County, New Jersey" , 
+                       "Middlesex County, New Jersey", "Monmouth County, New Jersey", "Ocean County, New Jersey", 
+                       "Somerset County, New Jersey", "Essex County, New Jersey", "Union County, New Jersey",
+                       "Morris County, New Jersey", "Sussex County, New Jersey", "Hunterdon County, New Jersey",
+                       "Mercer County, New Jersey", "Warren County, New Jersey")
+
+dat_2011 <- dat_2011 %>%
+  filter(NAME %in% selected_counties)
+
+```
