@@ -19,6 +19,7 @@ library(kableExtra)
 library(tidycensus)
 library(tigris)
 library(FNN)
+library(tiff)
 #library(QuantPsyc) # JE Note: in R 4.1, QuantPsyc package not available.
 library(caret)
 library(yardstick)
@@ -94,7 +95,53 @@ rast <- function(inRaster) {
 ```
 
 # 2: Data Wrangling
-# 2.1: ACS Data 
+## 2.1: Land Cover 
+```{r load_data, warning = FALSE, message = FALSE, results = "hide"}
+
+njMSA <- 
+  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/NJ_Counties_3424_6106433824930826716.geojson")
+
+lc_change = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nlcd_nj.tif")
+```
+## plot MSA
+```{r plot_msa, warning= FALSE, message= FALSE}
+ggplot() +
+  geom_sf(data=njMSA) +
+  geom_raster(data=rast(lc_change) %>% na.omit %>% filter(value > 0), 
+              aes(x,y,fill=as.factor(value))) +
+  scale_fill_viridis(direction = -1, discrete=TRUE, name ="Land Cover\nChange") +
+  labs(title = "Land Cover Change, 2011-2021") +
+  mapTheme +
+  theme(legend.direction="horizontal")
+```
+## reclassify land cover change 
+```{r, warning = FALSE, message = FALSE}
+reclassMatrix <- matrix(c(
+  0, 2, 0,
+  3, 3, 1,
+  3, Inf, 0),
+  ncol = 3, byrow = TRUE)
+
+reclassMatrix
+```
+```{r, warning = FALSE, message = FALSE}
+lc_change2 <- 
+  reclassify(lc_change,reclassMatrix)
+
+lc_change2[lc_change2 < 1] <- NA
+
+names(lc_change2) <- "lc_change"
+
+ggplot() +
+  geom_sf(data=njMSA) +
+  geom_raster(data=rast(lc_change2) %>% na.omit, 
+              aes(x,y,fill=as.factor(value))) +
+  scale_fill_viridis(discrete=TRUE, name ="Land Cover\nChange") + 
+  labs(title="Development Land Use Change") +
+  mapTheme
+```
+
+# 2.2: ACS Data 
 
 ```{r}
 # setting up api key 
@@ -158,4 +205,39 @@ ggplot() +
                    name="Quintile\nBreaks") +
   labs(title="Population, New Jersey (select counties): 2021") +
   mapTheme, ncol=2)
+```
+
+
+# plotting by census tract 
+```{r}
+# creating list for selected counties
+selected_counties <- c("Bergen County, New Jersey", "Hudson County, New Jersey", "Passaic County, New Jersey" , 
+                       "Middlesex County, New Jersey", "Monmouth County, New Jersey", "Ocean County, New Jersey", 
+                       "Somerset County, New Jersey", "Essex County, New Jersey", "Union County, New Jersey",
+                       "Morris County, New Jersey", "Sussex County, New Jersey", "Hunterdon County, New Jersey",
+                       "Mercer County, New Jersey", "Warren County, New Jersey")
+
+# pulling data from census for 2011
+dat_2011_tract <- get_acs(geography = "tract", 
+          variables = c("B01003_001E"), 
+          year = 2011, 
+          state = "NJ", 
+          county = c("Bergen", "Hudson", "Passaic", "Middlesex", "Monmouth", "Ocean", "Somerset",
+                     "Essex", "Union", "Morris", "Sussex", "Hunterdon", "Mercer", "Warren"),
+          geometry = TRUE, 
+          output = "wide") 
+
+dat_2011_tract <- dat_2011_tract %>%
+  rename(total_pop = B01003_001E) %>%
+  dplyr::select(GEOID, NAME, total_pop, geometry)
+
+
+ggplot() +
+  geom_sf(data = dat_2011_tract, aes(fill=factor(ntile(total_pop,5))), colour=NA) +
+  scale_fill_manual(values = palette5,
+                    labels=quintileBreaks(dat_2011_tract,"total_pop"),
+                   name="Quintile\nBreaks") +
+  labs(title="Population, New Jersey by census tract: 2011") +
+  mapTheme
+
 ```
