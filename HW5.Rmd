@@ -315,12 +315,56 @@ ggplot() +
   labs(title="Population, New Jersey by census tract: 2011") +
   mapTheme
 
+# pulling data from census for 2021
+dat_2021_tract <- get_acs(geography = "tract", 
+          variables = c("B01003_001E"), 
+          year = 2021, 
+          state = "NJ", 
+          county = c("Bergen", "Hudson", "Passaic", "Middlesex", "Monmouth", "Ocean", "Somerset",
+                     "Essex", "Union", "Morris", "Sussex", "Hunterdon", "Mercer", "Warren"),
+          geometry = TRUE, 
+          output = "wide") 
+
+dat_2021_tract <- dat_2021_tract %>%
+  rename(total_pop = B01003_001E) %>%
+  dplyr::select(GEOID, NAME, total_pop, geometry)
+
+
+ggplot() +
+  geom_sf(data = dat_2021_tract, aes(fill=factor(ntile(total_pop,5))), colour=NA) +
+  scale_fill_manual(values = palette5,
+                    labels=quintileBreaks(dat_2021_tract,"total_pop"),
+                   name="Quintile\nBreaks") +
+  labs(title="Population, New Jersey by census tract: 2021") +
+  mapTheme
+
+## grid arrange tract 2011 v 2021
+grid.arrange(
+ggplot() +
+  geom_sf(data = dat_2011_tract, aes(fill=factor(ntile(total_pop,5))), colour=NA) +
+  scale_fill_manual(values = palette5,
+                    labels=quintileBreaks(dat_2011_tract,"total_pop"),
+                   name="Quintile\nBreaks") +
+  labs(title="Population, New Jersey (by tract): 2011") +
+  mapTheme,
+
+ggplot() +
+  geom_sf(data = dat_2021_tract, aes(fill=factor(ntile(total_pop,5))), colour=NA) +
+  scale_fill_manual(values = palette5,
+                    labels=quintileBreaks(dat_2021_tract,"total_pop"),
+                   name="Quintile\nBreaks") +
+  labs(title="Population, New Jersey (by tract): 2021") +
+  mapTheme, ncol=2)
+
+## create a change in population map instead
+# density/ prox to density
+
 ```
 
 # 2.4 Highways 
 ```{r, warning = FALSE, message = FALSE, results = "hide"}
 njHighways <-
-  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nj_roads/NJ_Roadway_Network.shp") %>%
+  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/njroads_MSA.geojson") %>%
   st_zm() %>%
   st_transform(st_crs(njMSA)) %>%
   st_intersection(njMSA)
@@ -335,6 +379,40 @@ ggplot() +
                       labels=c("No Change","New Development")) +
   labs(title = "New Development and Highways",
        subtitle = "As fishnet centroids") +
+  mapTheme
+```
+
+```{r, warning = FALSE, message = FALSE}
+emptyRaster <- lc_change
+emptyRaster[] <- NA
+
+highway_raster <- 
+  as(njHighways,'Spatial') %>%
+  rasterize(.,emptyRaster)
+
+highway_raster_distance <- distance(highway_raster)
+names(highway_raster_distance) <- "distance_highways"
+
+highwayPoints <-
+  rasterToPoints(highway_raster_distance) %>%
+  as.data.frame() %>%
+  st_as_sf(coords = c("x", "y"), crs = st_crs(njMSA_fishnet))
+
+highwayPoints_fishnet <- 
+  aggregate(highwayPoints, njMSA_fishnet, mean) %>%
+  mutate(distance_highways = ifelse(is.na(distance_highways),0,distance_highways))
+
+ggplot() +
+  geom_sf(data=njMSA) +
+  geom_point(data=highwayPoints_fishnet, aes(x=xyC(highwayPoints_fishnet)[,1], 
+                                             y=xyC(highwayPoints_fishnet)[,2], 
+                 colour=factor(ntile(distance_highways,5))),size=1.5) +
+  scale_colour_manual(values = palette5,
+                      labels=substr(quintileBreaks(highwayPoints_fishnet,"distance_highways"),1,8),
+                      name="Quintile\nBreaks") +
+  geom_sf(data= njHighways, colour = "red") +
+  labs(title = "Distance to Highways",
+       subtitle = "As fishnet centroids; Highways visualized in red") +
   mapTheme
 ```
 
