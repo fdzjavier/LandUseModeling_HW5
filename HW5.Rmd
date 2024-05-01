@@ -98,11 +98,12 @@ rast <- function(inRaster) {
 ## 2.1: Land Cover 
 ```{r load_data, warning = FALSE, message = FALSE, results = "hide"}
 
-njMSA <- 
-  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/NJ_Counties_3424_6106433824930826716.geojson")
+njMSA <- st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nj_counties_msa.geojson")
 
-lc_change = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nlcd_nj.tif")
+lc_change = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nlcd_nj_msa/nlcd_nj_msa.tif")
 ```
+
+
 ## plot MSA
 ```{r plot_msa, warning= FALSE, message= FALSE}
 ggplot() +
@@ -114,6 +115,7 @@ ggplot() +
   mapTheme +
   theme(legend.direction="horizontal")
 ```
+
 ## reclassify land cover change 
 ```{r, warning = FALSE, message = FALSE}
 reclassMatrix <- matrix(c(
@@ -124,6 +126,7 @@ reclassMatrix <- matrix(c(
 
 reclassMatrix
 ```
+
 ```{r, warning = FALSE, message = FALSE}
 lc_change2 <- 
   reclassify(lc_change,reclassMatrix)
@@ -141,7 +144,79 @@ ggplot() +
   mapTheme
 ```
 
-# 2.2: ACS Data 
+## fishnet
+```{r, warning = FALSE, message = FALSE}
+njMSA_fishnet <- 
+  st_make_grid(njMSA, 500) %>%
+  st_sf()
+
+njMSA_fishnet <-
+  njMSA_fishnet[njMSA,]
+
+ggplot() +
+  geom_sf(data=njMSA_fishnet) +
+  labs(title="Fishnet, 500 Foot Resolution") +
+  mapTheme
+```
+
+```{r, warning = FALSE, message = FALSE}
+changePoints <-
+  rasterToPoints(lc_change2) %>%
+  as.data.frame() %>%
+  st_as_sf(coords = c("x", "y"), crs = st_crs(njMSA_fishnet))
+
+fishnet <- 
+  aggregate(changePoints, njMSA_fishnet, sum) %>%
+  mutate(lc_change = ifelse(is.na(lc_change),0,1),
+         lc_change = as.factor(lc_change))
+
+ggplot() +
+  geom_sf(data=njMSA) +
+  geom_point(data=fishnet, 
+             aes(x=xyC(fishnet)$x, y=xyC(fishnet)$y, colour=lc_change)) +
+  scale_colour_manual(values = palette2,
+                      labels=c("No Change","New Development"),
+                      name = "") +
+  labs(title = "Land Cover Development Change", subtitle = "As fishnet centroids") +
+  mapTheme
+```
+# 2.2 land cover change 2011
+```{r, warning = FALSE, message = FALSE}
+lc_2011 <- raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/lc_nj_msa_2011.tif.aux/lc_nj_msa_2011.tif")
+
+ggplot() +
+  geom_sf(data=njMSA) +
+  geom_raster(data=rast(lc_2011) %>% na.omit %>% filter(value > 0), 
+              aes(x,y,fill=as.factor(value))) +
+  scale_fill_viridis(discrete=TRUE, name ="") +
+  labs(title = "Land Cover, 2011") +
+  mapTheme +
+  theme(legend.direction="horizontal")
+
+#### trying to recolor based on MRLC categorization
+## FIGURE THIS OUT
+LCcodes <- unique(lc_2011)
+
+LCnames <-c(
+  "Water",
+  "DevelopedOpen",
+  "DevelopedLow",
+  "DevelopedMed",
+  "DevelopedHigh",
+  "Barren",
+  "DeciduousForest",
+  "EvergreenForest",
+  "MixedForest",
+  "ShrubScrub",
+  "GrassHerbaceous",
+  "PastureHay",
+  "CultCrops",
+  "WoodyWetlands",
+  "EmergentHerbWet")
+```
+
+
+# 2.3: ACS Data 
 
 ```{r}
 # setting up api key 
@@ -241,3 +316,26 @@ ggplot() +
   mapTheme
 
 ```
+
+# 2.4 Highways 
+```{r, warning = FALSE, message = FALSE, results = "hide"}
+njHighways <-
+  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nj_roads/NJ_Roadway_Network.shp") %>%
+  st_zm() %>%
+  st_transform(st_crs(njMSA)) %>%
+  st_intersection(njMSA)
+```
+
+```{r plot_highway, warning = FALSE, message= FALSE}
+ggplot() +
+  geom_point(data=fishnet, 
+             aes(x=xyC(fishnet)[,1], y=xyC(fishnet)[,2],colour=lc_change),size=1.5) +
+  geom_sf(data= njHighways) +
+  scale_colour_manual(values = palette2,
+                      labels=c("No Change","New Development")) +
+  labs(title = "New Development and Highways",
+       subtitle = "As fishnet centroids") +
+  mapTheme
+```
+
+# 2.5 Spatial Lag
