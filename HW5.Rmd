@@ -147,7 +147,7 @@ ggplot() +
 ## fishnet
 ```{r, warning = FALSE, message = FALSE}
 njMSA_fishnet <- 
-  st_make_grid(njMSA, 500) %>%
+  st_make_grid(njMSA, 2000) %>%
   st_sf()
 
 njMSA_fishnet <-
@@ -155,7 +155,7 @@ njMSA_fishnet <-
 
 ggplot() +
   geom_sf(data=njMSA_fishnet) +
-  labs(title="Fishnet, 500 Foot Resolution") +
+  labs(title="Fishnet, 2000 Foot Resolution") +
   mapTheme
 ```
 
@@ -195,7 +195,7 @@ ggplot() +
 
 #### trying to recolor based on MRLC categorization
 ## FIGURE THIS OUT
-LCcodes <- unique(lc_2011)
+#LCcodes <- unique(lc_2011)
 
 LCnames <-c(
   "Water",
@@ -213,8 +213,76 @@ LCnames <-c(
   "CultCrops",
   "WoodyWetlands",
   "EmergentHerbWet")
+
+ggplot
+```
+## 2.2.1: Reclassifying land use type
+```{r, warning = FALSE, message = FALSE}
+developed <- lc_2011 == 21 | lc_2011 == 22 | lc_2011 == 23 | lc_2011 == 24
+forest <- lc_2011 == 41 | lc_2011 == 42 | lc_2011 == 43 
+farm <- lc_2011 == 81 | lc_2011 == 82 
+wetlands <- lc_2011 == 90 | lc_2011 == 95 
+otherUndeveloped <- lc_2011 == 52 | lc_2011 == 71 | lc_2011 == 31 
+water <- lc_2011 == 11
+
+names(developed) <- "developed"
+names(forest) <- "forest"
+names(farm) <- "farm"
+names(wetlands) <- "wetlands"
+names(otherUndeveloped) <- "otherUndeveloped"
+names(water) <- "water"
 ```
 
+```{r, warning = FALSE, message = FALSE}
+aggregateRaster <- function(inputRasterList, theFishnet) {
+  #create an empty fishnet with the same dimensions as the input fishnet
+  theseFishnets <- theFishnet %>% dplyr::select()
+  #for each raster in the raster list
+  for (i in inputRasterList) {
+  #create a variable name corresponding to the ith raster
+  varName <- names(i)
+  #convert raster to points as an sf
+    thesePoints <-
+      rasterToPoints(i) %>%
+      as.data.frame() %>%
+      st_as_sf(coords = c("x", "y"), crs = st_crs(theFishnet)) %>%
+      filter(.[[1]] == 1)
+  #aggregate to the fishnet
+    thisFishnet <-
+      aggregate(thesePoints, theFishnet, length) %>%
+      mutate(!!varName := ifelse(is.na(.[[1]]),0,1))
+  #add to the larger fishnet
+    theseFishnets <- cbind(theseFishnets,thisFishnet)
+  }
+  #output all aggregates as one large fishnet
+   return(theseFishnets)
+  }
+```
+
+```{r, warning = FALSE, message = FALSE}
+theRasterList <- c(developed,forest,farm,wetlands,otherUndeveloped,water)
+
+aggregatedRasters <-
+  aggregateRaster(theRasterList, njMSA_fishnet) %>%
+  dplyr::select(developed,forest,farm,wetlands,otherUndeveloped,water) %>%
+  mutate_if(is.numeric,as.factor)
+
+aggregatedRasters %>%
+  gather(var,value,developed:water) %>%
+  st_cast("POLYGON") %>%    #just to make sure no weird geometries slipped in
+  mutate(X = xyC(.)$x,
+         Y = xyC(.)$y) %>%
+  ggplot() +
+    geom_sf(data=houstonMSA) +
+    geom_point(aes(X,Y, colour=as.factor(value))) +
+    facet_wrap(~var) +
+    scale_colour_manual(values = palette2,
+                        labels=c("Other","Land Cover"),
+                        name = "") +
+    labs(title = "Land Cover Types, 2001",
+         subtitle = "As fishnet centroids") +
+   mapTheme
+```
 
 # 2.3: ACS Data 
 
