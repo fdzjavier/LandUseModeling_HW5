@@ -511,14 +511,13 @@ ggplot() +
   geom_sf(data=dvMSA) +
   geom_point(data=fishnet, 
              aes(x=xyC(fishnet)[,1], y=xyC(fishnet)[,2], 
-                 colour=factor(ntile(lagDevelopment,5))), size=1.5) +
-  scale_colour_manual(values = palette5,
-                     labels=substr(quintileBreaks(fishnet,"lagDevelopment"),1,7),
-                     name="Quintile\nBreaks") +
+                 colour= log(lagDevelopment), size=.001)) +
   labs(title = "Spatial Lag to 2011 Development",
-       subtitle = "As fishnet centroids") +
-  mapTheme
-
+       subtitle = "As fishnet centroids")
+# make histogram
+# try viridis
+# log color/lagdevelopment
+# filter out og developed cells 
 ```
 
 ```{r}
