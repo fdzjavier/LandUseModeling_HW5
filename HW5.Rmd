@@ -3,9 +3,10 @@ title: "Urban Growth Modeling"
 author: "Javier Fernandez, Lu Yii Wong"
 date: "2024-04-30"
 output: html_document
-
 ---
-# 1: Setup 
+
+# 1: Setup
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
@@ -72,7 +73,6 @@ palette10 <- c("#f7fcf0","#e0f3db","#ccebc5","#a8ddb5","#7bccc4",
                "#4eb3d3","#2b8cbe","#0868ac","#084081","#f7fcf0")
 ```
 
-
 ```{r, warning = FALSE, message = FALSE}
 #this function converts a column in to quintiles. It is used for mapping.
 quintileBreaks <- function(df,variable) {
@@ -95,16 +95,158 @@ rast <- function(inRaster) {
 ```
 
 # 2: Data Wrangling
-## 2.1: Land Cover 
+
+## 2.1: Land Cover
+
 ```{r load_data, warning = FALSE, message = FALSE, results = "hide"}
 
 njMSA <- st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nj_counties_msa.geojson")
 
-lc_change = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nlcd_nj_msa/nlcd_nj_msa.tif")
+lc_2011 <- raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/lc_nj_msa_2011.tif.aux/lc_nj_msa_2011.tif")
+
+#resampled version
+lc_2021 <- raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/lc_2021_resampled/lc_2021_resampled.tif")
+
+# lc_2021 = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nlcd_2021_landcover.tif.aux/nlcd_2021_landcover.tif")
+
+#lc_change = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/nlcd_nj_msa/nlcd_nj_msa.tif")
+```
+
+```{r}
+### ATTEMPT TO MAKE THE RESOLUTION 4000 TO FIT THE FISHNET
+
+# resampling to make sure the resolutions are the same
+lc_2021_resampled <- resample(lc_2021, lc_2011, method = "bilinear")
+res(lc_2011)
+res(lc_2021_resampled)
+
+#defining raster resolution
+new_res <- c(197.9719, 154.8713) * 197.9719 / 4000
+
+lc_2011_resampled <- aggregate(lc_2011, fact = 4000/res(lc_2011))
+res(lc_2011_resampled)
+lc_2021_resampled <- aggregate(lc_2021_resampled, fact = 4000/res(lc_2021_resampled))
+res(lc_2021_resampled)
+
+
+#lc_2011_resampled <- resample(lc_2011, res = new_res, method = "bilinear")
+#lc_2021_resampled <- resample(lc_2021_resampled, res = new_res, method = "bilinear")
+
+#reclassification matrix
+reclassMatrix <- 
+  matrix(c(
+    0,12,0,
+    12,24,1,
+    24,Inf,0),
+  ncol=3, byrow=T)
+
+# reclassifying lc to developed and not developed
+developed_2011 <- reclassify(lc_2011_resampled,reclassMatrix)
+developed_2021 <- reclassify(lc_2021_resampled,reclassMatrix)
+
+res(developed_2011)
+res(developed_2021)
+
+# creating a land cover change dataframe
+development_change <- developed_2011 + developed_2021
+
+hist(development_change)
+
+
+development_change[development_change != 1] <- NA
+
+ggplot() +
+  geom_sf(data=njMSA) +
+  geom_raster(data=rast(development_change) %>% na.omit, 
+              aes(x,y,fill=as.factor(value))) +
+  scale_fill_viridis(discrete=TRUE, name ="Land Cover\nChange") + 
+  labs(title="Development land use change") +
+  mapTheme
+```
+
+```{r}
+### ATTEMPT TO CREATE A TEMPLATE RASTER
+
+template_raster <- raster(extent(lc_2011), resolution = 4000, 
+                          crs = st_crs(lc_2011)$proj4string)
+
+res(lc_2011)
+projected_raster <= projectRaster(from = lc_2011, to = template_raster)
 ```
 
 
+```{r}
+
+lc_change <- lc_2011 + lc_2021_resampled
+lc_change_filtered <- mask(lc_change, lc_change >0)
+
+# WHY DOES THIS PART TAKE SO LONG TO RUN?
+# Land Cover Change, 2011-2021
+ggplot() +
+  geom_sf(data=njMSA) +
+  geom_raster(data=rast(lc_change_filtered) %>% na.omit, 
+              aes(x,y,fill=as.factor(value))) +
+  scale_fill_viridis(direction = -1, discrete=TRUE, name ="Land Cover\nChange") +
+  labs(title = "Land Cover Change, 2011-2021") +
+  mapTheme +
+  theme(legend.direction="horizontal")
+
+```
+
+## creating fishnet
+
+```{r}
+njMSA_fishnet <- 
+  st_make_grid(njMSA, 4000) %>%
+  st_sf()
+
+njMSA_fishnet <-
+  njMSA_fishnet[njMSA,]
+
+ggplot() +
+  geom_sf(data=njMSA_fishnet) +
+  labs(title="Fishnet, 4000 Foot Resolution") +
+  mapTheme
+```
+
+```{r}
+changePoints <-
+  rasterToPoints(development_change) %>%
+  as.data.frame() %>%
+  st_as_sf(coords = c("x", "y"), crs = st_crs(njMSA_fishnet))
+
+fishnet <- 
+  aggregate(changePoints, njMSA_fishnet, sum) %>%
+  mutate(development_change = ifelse(is.na(development_change),0,1),
+         development_change = as.factor(development_change))
+
+ggplot() +
+  geom_sf(data=njMSA) +
+  geom_point(data=fishnet, 
+             aes(x=xyC(fishnet)$x, y=xyC(fishnet)$y, colour=development_change)) +
+  scale_colour_manual(values = palette2,
+                      labels=c("No Change","New Development"),
+                      name = "") +
+  labs(title = "Land Cover Development Change", subtitle = "As fishnet centroids") +
+  mapTheme
+```
+
+```{r, warning = FALSE, message = FALSE}
+development_change[development_change != 1] <- NA
+
+ggplot() +
+  geom_sf(data=njMSA) +
+  geom_raster(data=rast(development_change) %>% na.omit, 
+              aes(x,y,fill=as.factor(value))) +
+  scale_fill_viridis(discrete=TRUE, name ="Land Cover/nChange") + 
+  labs(title="Development land use change") +
+  mapTheme
+
+aggregate(development_change, fact = 20)
+```
+
 ## plot MSA
+
 ```{r plot_msa, warning= FALSE, message= FALSE}
 ggplot() +
   geom_sf(data=njMSA) +
@@ -116,7 +258,8 @@ ggplot() +
   theme(legend.direction="horizontal")
 ```
 
-## reclassify land cover change 
+## reclassify land cover change
+
 ```{r, warning = FALSE, message = FALSE}
 reclassMatrix <- matrix(c(
   0, 2, 0,
@@ -145,6 +288,7 @@ ggplot() +
 ```
 
 ## fishnet
+
 ```{r, warning = FALSE, message = FALSE}
 njMSA_fishnet <- 
   st_make_grid(njMSA, 2000) %>%
@@ -180,7 +324,9 @@ ggplot() +
   labs(title = "Land Cover Development Change", subtitle = "As fishnet centroids") +
   mapTheme
 ```
+
 # 2.2 land cover change 2011
+
 ```{r, warning = FALSE, message = FALSE}
 lc_2011 <- raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/lc_nj_msa_2011.tif.aux/lc_nj_msa_2011.tif")
 
@@ -216,7 +362,9 @@ LCnames <-c(
 
 ggplot
 ```
+
 ## 2.2.1: Reclassifying land use type
+
 ```{r, warning = FALSE, message = FALSE}
 developed <- lc_2011 == 21 | lc_2011 == 22 | lc_2011 == 23 | lc_2011 == 24
 forest <- lc_2011 == 41 | lc_2011 == 42 | lc_2011 == 43 
@@ -262,6 +410,8 @@ aggregateRaster <- function(inputRasterList, theFishnet) {
 ```{r, warning = FALSE, message = FALSE}
 theRasterList <- c(developed,forest,farm,wetlands,otherUndeveloped,water)
 
+
+## DID NOT RUN THIS SECTION ##
 aggregatedRasters <-
   aggregateRaster(theRasterList, njMSA_fishnet) %>%
   dplyr::select(developed,forest,farm,wetlands,otherUndeveloped,water) %>%
@@ -273,18 +423,18 @@ aggregatedRasters %>%
   mutate(X = xyC(.)$x,
          Y = xyC(.)$y) %>%
   ggplot() +
-    geom_sf(data=houstonMSA) +
+    geom_sf(data=njMSA) +
     geom_point(aes(X,Y, colour=as.factor(value))) +
     facet_wrap(~var) +
     scale_colour_manual(values = palette2,
                         labels=c("Other","Land Cover"),
                         name = "") +
-    labs(title = "Land Cover Types, 2001",
+    labs(title = "Land Cover Types, 2011",
          subtitle = "As fishnet centroids") +
    mapTheme
 ```
 
-# 2.3: ACS Data 
+# 2.3: ACS Data
 
 ```{r}
 # setting up api key 
@@ -329,9 +479,10 @@ dat_2021 <- get_acs(geography = "county",
 
 ```
 
-## plotting population 
+## plotting population
 
 ```{r, warning = FALSE, message = FALSE, fig.height= 8, fig.width= 11}
+## BY COUNTY, NO NEED ##
 grid.arrange(
 ggplot() +
   geom_sf(data = dat_2011, aes(fill=factor(ntile(total_pop,5))), colour=NA) +
@@ -350,8 +501,8 @@ ggplot() +
   mapTheme, ncol=2)
 ```
 
+# plotting by census tract
 
-# plotting by census tract 
 ```{r}
 # creating list for selected counties
 selected_counties <- c("Bergen County, New Jersey", "Hudson County, New Jersey", "Passaic County, New Jersey" , 
@@ -429,7 +580,8 @@ ggplot() +
 
 ```
 
-# 2.4 Highways 
+# 2.4 Highways
+
 ```{r, warning = FALSE, message = FALSE, results = "hide"}
 njHighways <-
   st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/njroads_MSA.geojson") %>%
