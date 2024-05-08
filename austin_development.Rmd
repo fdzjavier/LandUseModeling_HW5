@@ -418,9 +418,11 @@ ggplot() +
 #  st_intersection(auMSA)
 
 auHighways <-
-  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AustinHighways_v3.geojson") %>%
+  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AustinHighways_v4.geojson") %>%
   st_transform(st_crs(auMSA)) %>%
   st_intersection(auMSA)
+
+auHighways = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AustinHighways_raster.tif")
 ```
 
 ```{r plot_highway, warning = FALSE, message= FALSE}
@@ -439,8 +441,11 @@ ggplot() +
 emptyRaster <- lc_change
 emptyRaster[] <- NA
 
+# auHighways_spdf <- as(st_as_sf(auHighways), "SpatialPolygonsDataFrame")
 auHighways_spdf <- as(auHighways, "Spatial")
 highway_raster <- rasterize(auHighways, emptyRaster)
+
+# highway_raster <- auHighways
 
 #highway_raster <- 
   #as(auHighways,'Spatial') %>%
