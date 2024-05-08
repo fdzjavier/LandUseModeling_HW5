@@ -104,7 +104,7 @@ For the purpose of this study, we are only focusing on the counties located with
 - Philadelphia County
 
 ```{r load_data, warning = FALSE, message = FALSE, results = "hide"}
-auMSA <- st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AustinMSA_v2geojson.json") 
+auMSA <- st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AustinMSA_v3.geojson") 
 
 lc_2011 = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AU_lc_2011_Resample_v2.tif")
 lc_2021 = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AU_lc_2021_Resample_v2.tif")
@@ -418,7 +418,7 @@ ggplot() +
 #  st_intersection(auMSA)
 
 auHighways <-
-  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AustinHighways_v2geojson.json") %>%
+  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AustinHighways_v3.geojson") %>%
   st_transform(st_crs(auMSA)) %>%
   st_intersection(auMSA)
 ```
