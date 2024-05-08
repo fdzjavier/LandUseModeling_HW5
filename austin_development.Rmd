@@ -104,10 +104,11 @@ For the purpose of this study, we are only focusing on the counties located with
 - Philadelphia County
 
 ```{r load_data, warning = FALSE, message = FALSE, results = "hide"}
-njMSA <- st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/NEED_nj_counties_msa.geojson") 
+auMSA <- st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AustinMSA.geojson") %>%
+  st_transform(crs = 2278)
 
-lc_2011 = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/lc_2011_Resample.tif")
-lc_2021 = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/lc_2021_Resample.tif")
+lc_2011 = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AU_lc_2011_Resample.tif")
+lc_2021 = raster("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/AustinData/AU_lc_2021_Resample.tif")
 
 lc_change <- lc_2011+lc_2021
 
@@ -143,7 +144,7 @@ hist(development_change)
 development_change[development_change != 1] <- NA
 
 ggplot() +
-  geom_sf(data=njMSA) +
+  geom_sf(data=auMSA) +
   geom_raster(data=rast(development_change) %>% na.omit, 
               aes(x,y,fill=as.factor(value))) +
   scale_fill_viridis(discrete=TRUE, name ="Land Cover\nChange") + 
@@ -160,7 +161,7 @@ lc_change2[lc_change2 < 1] <- NA
 names(lc_change2) <- "lc_change"
 
 ggplot() +
-  geom_sf(data=njMSA) +
+  geom_sf(data=auMSA) +
   geom_raster(data=rast(lc_change2) %>% na.omit, 
               aes(x,y,fill=as.factor(value))) +
   scale_fill_viridis(discrete=TRUE, name ="Land Cover\nChange") + 
@@ -170,16 +171,16 @@ ggplot() +
 
 # creating the fishnet
 ```{r, warning = FALSE, message = FALSE}
-njMSA_fishnet <- 
-  st_make_grid(njMSA, 2000) %>%
+auMSA_fishnet <- 
+  st_make_grid(auMSA, 2000) %>%
   st_sf()
 
-njMSA_fishnet <-
-  njMSA_fishnet[njMSA,]
+auMSA_fishnet <-
+  auMSA_fishnet[auMSA,]
 ```
 ```{r, warning = FALSE, message= FALSE}
 ggplot() +
-  geom_sf(data=njMSA_fishnet) +
+  geom_sf(data=auMSA_fishnet) +
   labs(title="Fishnet, 2000 Foot Resolution") +
   mapTheme
 ```
@@ -189,15 +190,15 @@ ggplot() +
 changePoints <-
   rasterToPoints(lc_change2) %>%
   as.data.frame() %>%
-  st_as_sf(coords = c("x", "y"), crs = st_crs(njMSA_fishnet))
+  st_as_sf(coords = c("x", "y"), crs = st_crs(auMSA_fishnet))
 
 fishnet <- 
-  aggregate(changePoints, njMSA_fishnet, sum) %>%
+  aggregate(changePoints, auMSA_fishnet, sum) %>%
   mutate(lc_change = ifelse(is.na(lc_change),0,1),
          lc_change = as.factor(lc_change))
 
 ggplot() +
-  geom_sf(data=njMSA) +
+  geom_sf(data=auMSA) +
   geom_point(data=fishnet, 
              aes(x=xyC(fishnet)$x, y=xyC(fishnet)$y, colour=lc_change)) +
   scale_colour_manual(values = palette2,
@@ -211,7 +212,7 @@ ggplot() +
 
 ```{r, warning = FALSE, message = FALSE}
 ggplot() +
-  geom_sf(data=njMSA) +
+  geom_sf(data=auMSA) +
   geom_raster(data=rast(lc_2011) %>% na.omit %>% filter(value > 0), 
               aes(x,y,fill=as.factor(value))) +
   scale_fill_viridis(discrete=TRUE, name ="") +
@@ -277,7 +278,7 @@ aggregateRaster <- function(inputRasterList, theFishnet) {
 theRasterList <- c(developed,forest,farm,wetlands,otherUndeveloped,water)
 
 aggregatedRasters <-
-  aggregateRaster(theRasterList, njMSA_fishnet) %>%
+  aggregateRaster(theRasterList, auMSA_fishnet) %>%
   dplyr::select(developed,forest,farm,wetlands,otherUndeveloped,water) %>%
   mutate_if(is.numeric,as.factor)
 
@@ -287,7 +288,7 @@ aggregatedRasters %>%
   mutate(X = xyC(.)$x,
          Y = xyC(.)$y) %>%
   ggplot() +
-    geom_sf(data=njMSA) +
+    geom_sf(data=auMSA) +
     geom_point(aes(X,Y, colour=as.factor(value))) +
     facet_wrap(~var) +
     scale_colour_manual(values = palette2,
@@ -357,27 +358,27 @@ ggplot() +
 
 ## interpolating population and fishnet
 ```{r, warning = FALSE, message = FALSE}
-njMSA_fishnet <-
-  njMSA_fishnet %>%
+auMSA_fishnet <-
+  auMSA_fishnet %>%
   rownames_to_column("fishnetID") %>% 
   mutate(fishnetID = as.numeric(fishnetID)) %>%
   dplyr::select(fishnetID)
 
 fishnetPopulation11 <-
-  st_interpolate_aw(njpop_2011["pop_2011"], njMSA_fishnet, extensive=TRUE) %>%
+  st_interpolate_aw(njpop_2011["pop_2011"], auMSA_fishnet, extensive=TRUE) %>%
   as.data.frame(.) %>%
   rownames_to_column(var = "fishnetID") %>%
-  left_join(njMSA_fishnet %>%
+  left_join(auMSA_fishnet %>%
               mutate(fishnetID = as.character(fishnetID)),
             ., by=c("fishnetID"='fishnetID')) %>% 
   mutate(pop_2011 = replace_na(pop_2011,0)) %>%
   dplyr::select(pop_2011)
 
 fishnetPopulation21 <-
-  st_interpolate_aw(njpop_2021["pop_2021"],njMSA_fishnet, extensive=TRUE) %>%
+  st_interpolate_aw(njpop_2021["pop_2021"],auMSA_fishnet, extensive=TRUE) %>%
   as.data.frame(.) %>%
   rownames_to_column(var = "fishnetID") %>%
-  left_join(njMSA_fishnet %>%
+  left_join(auMSA_fishnet %>%
               mutate(fishnetID = as.character(fishnetID)),
             ., by=c("fishnetID"='fishnetID')) %>% 
   mutate(pop_2021 = replace_na(pop_2021,0)) %>%
@@ -414,13 +415,13 @@ ggplot() +
 ```{r, warning = FALSE, message = FALSE, results = "hide"}
 #njHighways <-
 #  st_read("C:/Users/ferna/OneDrive/Documents/ArcGIS/Projects/CPLN 6750/HW5/dv_roads.geojson") %>%
-#  st_transform(st_crs(njMSA)) %>%
-#  st_intersection(njMSA)
+#  st_transform(st_crs(auMSA)) %>%
+#  st_intersection(auMSA)
 
 njHighways <-
   st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/Data/NEED_njroads_MSA.geojson") %>%
-  st_transform(st_crs(njMSA)) %>%
-  st_intersection(njMSA)
+  st_transform(st_crs(auMSA)) %>%
+  st_intersection(auMSA)
 ```
 
 ```{r plot_highway, warning = FALSE, message= FALSE}
@@ -452,14 +453,14 @@ names(highway_raster_distance) <- "distance_highways"
 highwayPoints <-
   rasterToPoints(highway_raster_distance) %>%
   as.data.frame() %>%
-  st_as_sf(coords = c("x", "y"), crs = st_crs(njMSA_fishnet))
+  st_as_sf(coords = c("x", "y"), crs = st_crs(auMSA_fishnet))
 
 highwayPoints_fishnet <- 
-  aggregate(highwayPoints, njMSA_fishnet, mean) %>%
+  aggregate(highwayPoints, auMSA_fishnet, mean) %>%
   mutate(distance_highways = ifelse(is.na(distance_highways),0,distance_highways))
 
 ggplot() +
-  geom_sf(data=njMSA) +
+  geom_sf(data=auMSA) +
   geom_point(data=highwayPoints_fishnet, aes(x=xyC(highwayPoints_fishnet)[,1], 
                                              y=xyC(highwayPoints_fishnet)[,2], 
                  colour=factor(ntile(distance_highways,5))),size=1.5) +
@@ -504,7 +505,7 @@ fishnet$lagDevelopment <-
                 2)
 
 ggplot() +
-  geom_sf(data=njMSA) +
+  geom_sf(data=auMSA) +
   geom_point(data=fishnet, 
              aes(x=xyC(fishnet)[,1], y=xyC(fishnet)[,2], 
                  colour= log(lagDevelopment), size=.001)) +
@@ -523,9 +524,9 @@ options(tigris_class = "sf")
 
 studyAreaCounties <- 
   counties("New Jersey") %>%
-  st_transform(st_crs(njMSA)) %>%
+  st_transform(st_crs(auMSA)) %>%
   dplyr::select(NAME) %>%
-  .[st_buffer(njMSA,-1000), , op=st_intersects] 
+  .[st_buffer(auMSA,-1000), , op=st_intersects] 
 
 studyAreaCounties <- studyAreaCounties[studyAreaCounties$NAME != 'Atlantic', ]
 ```
@@ -590,8 +591,8 @@ dat %>%
 ```{r, warning = FALSE, message = FALSE, results = "hide"}
 njHighways <-
   st_read("/Users/luyiiwong/Documents/Land Use & Environmental Modeling/Assignment5/dvroad_clip/dvroad_clip2.shp") %>%
-  st_transform(st_crs(njMSA)) %>%
-  st_intersection(njMSA)
+  st_transform(st_crs(auMSA)) %>%
+  st_intersection(auMSA)
 ```
 
 ```{r plot_highway, warning = FALSE, message= FALSE}
