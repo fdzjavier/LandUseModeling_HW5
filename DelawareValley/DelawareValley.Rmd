@@ -524,10 +524,29 @@ ggplot() +
 # filter out og developed cells 
 ```
 
+# Create MSA Counties 
+
+```{r, warning = FALSE, message = FALSE, results = "hide"}
+options(tigris_class = "sf")
+
+studyAreaCounties <- 
+  counties("Pennsylvania") %>%
+  st_transform(st_crs(dvMSA)) %>%
+  dplyr::select(NAME) %>%
+  .[st_buffer(dvMSA,-500), , op=st_intersects]
+```
+
+```{r, warning = FALSE, message = FALSE}
+ggplot() +
+  geom_sf(data=studyAreaCounties) +
+  labs(title = "Study Area Counties") +
+  mapTheme
+```
+#  Create the Final Dataset 
+Once we join the data set with out county boundaries, all the lc_change =1 is dropped
 ```{r}
 dat <- 
-  cbind(
-    fishnet, highwayPoints_fishnet, fishnetPopulation, aggregatedRasters) %>%
+  cbind(fishnet, highwayPoints_fishnet, fishnetPopulation, aggregatedRasters)%>%
   dplyr::select(lc_change, developed, forest, farm, wetlands, otherUndeveloped, water,
                 pop_2011, pop_2021, pop_Change, distance_highways,lagDevelopment) %>%
   st_join(studyAreaCounties) %>%
@@ -535,6 +554,36 @@ dat <-
   filter(water == 0) 
 ```
 
+# Exploratroy Analysis
+It seems like land change only occured from undeveloped to water. Therefore, there is no new development...
+```{r, warning = FALSE, message = FALSE}
+dat %>%
+  dplyr::select(distance_highways,lagDevelopment,lc_change) %>%
+  gather(Variable, Value, -lc_change, -geometry) %>%
+  ggplot(., aes(lc_change, Value, fill=lc_change)) + 
+    geom_bar(position = "dodge", stat = "summary", fun.y = "mean") +
+    facet_wrap(~Variable) +
+    scale_fill_manual(values = palette2,
+                      labels=c("No Change","New Development"),
+                      name="") +
+    labs(title="New Development as a Function of the Continuous Variables") +
+    plotTheme 
+```
+
+
+```{r, warning = FALSE, message = FALSE}
+dat %>%
+  dplyr::select(pop_2011,pop_2021,pop_Change,lc_change) %>%
+  gather(Variable, Value, -lc_change, -geometry) %>%
+  ggplot(., aes(lc_change, Value, fill=lc_change)) + 
+    geom_bar(position = "dodge", stat = "summary", fun.y = "mean") +
+    facet_wrap(~Variable) +
+    scale_fill_manual(values = palette2,
+                      labels=c("No Change","New Development"),
+                      name="") +
+    labs(title="New Development as a Function of Factor Variables") +
+    plotTheme
+```
 
 #### OLD Highway Distance OLD
 ```{r, warning = FALSE, message = FALSE, results = "hide"}
