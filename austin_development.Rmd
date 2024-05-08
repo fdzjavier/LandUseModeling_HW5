@@ -310,54 +310,45 @@ census_api_key("b83a23afee4a8ed0fa131e449869e6577b87151e", overwrite = TRUE, ins
 - Philadelphia County
 
 ```{r}
-# creating list for selected counties
-selected_counties <- c("Bergen County, New Jersey", "Hudson County, New Jersey", "Passaic County, New Jersey" , 
-                       "Middlesex County, New Jersey", "Monmouth County, New Jersey", "Ocean County, New Jersey", 
-                       "Somerset County, New Jersey", "Essex County, New Jersey", "Union County, New Jersey",
-                       "Morris County, New Jersey", "Sussex County, New Jersey", "Hunterdon County, New Jersey",
-                       "Mercer County, New Jersey", "Warren County, New Jersey")
-
 # pulling data from census for 2011
-njpop_2011 <- get_acs(geography = "tract", 
+aupop_2011 <- get_acs(geography = "tract", 
           variables = c("B01003_001E"), 
           year = 2011, 
-          state = "NJ", 
-          county = c("Bergen", "Hudson", "Passaic", "Middlesex", "Monmouth", "Ocean", "Somerset",
-                     "Essex", "Union", "Morris", "Sussex", "Hunterdon", "Mercer", "Warren"),
+          state = "TX", 
+          county = c("Travis", "Williamson", "Caldwell", "Hays", "Bastrop"),
           geometry = TRUE, 
           output = "wide")  %>%
   rename(pop_2011 = B01003_001E) %>%
   dplyr::select(GEOID, NAME, pop_2011, geometry) %>%
-  st_transform(crs = 3424)
+  st_transform(crs = 2278)
 
 
 # pulling data from census for 2021
-njpop_2021 <- get_acs(geography = "tract", 
+aupop_2021 <- get_acs(geography = "tract", 
           variables = c("B01003_001E"), 
           year = 2021, 
-          state = "NJ", 
-          county = c("Bergen", "Hudson", "Passaic", "Middlesex", "Monmouth", "Ocean", "Somerset",
-                     "Essex", "Union", "Morris", "Sussex", "Hunterdon", "Mercer", "Warren"),
+          state = "TX", 
+          county = c("Travis", "Williamson", "Caldwell", "Hays", "Bastrop"),
           geometry = TRUE, 
           output = "wide") %>%
   rename(pop_2021 = B01003_001E) %>%
   dplyr::select(GEOID, NAME, pop_2021, geometry) %>%
-  st_transform(crs = 3424)
+  st_transform(crs = 2278)
 
 ## grid arrange tract 2011 v 2021
 grid.arrange(
 ggplot() +
-  geom_sf(data = njpop_2011, aes(fill=factor(ntile(pop_2011,5))), colour=NA) +
+  geom_sf(data = aupop_2011, aes(fill=factor(ntile(pop_2011,5))), colour=NA) +
   scale_fill_manual(values = palette5,
-                    labels=quintileBreaks(njpop_2011,"pop_2011"),
+                    labels=quintileBreaks(aupop_2011,"pop_2011"),
                    name="Quintile\nBreaks") +
   labs(title="Population, New Jersey (by tract): 2011") +
   mapTheme,
 
 ggplot() +
-  geom_sf(data = njpop_2021, aes(fill=factor(ntile(pop_2021,5))), colour=NA) +
+  geom_sf(data = aupop_2021, aes(fill=factor(ntile(pop_2021,5))), colour=NA) +
   scale_fill_manual(values = palette5,
-                    labels=quintileBreaks(njpop_2021,"pop_2021"),
+                    labels=quintileBreaks(aupop_2021,"pop_2021"),
                    name="Quintile\nBreaks") +
   labs(title="Population, New Jersey (by tract): 2021") +
   mapTheme, ncol=2)
