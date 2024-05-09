@@ -156,6 +156,7 @@ ggplot() +
 lc_change2 <- 
   reclassify(lc_change,reclassMatrix)
 
+# does this line of code not get rid of values = 2?
 lc_change2[lc_change2 < 1] <- NA
 
 names(lc_change2) <- "lc_change"
