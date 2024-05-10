@@ -1,7 +1,13 @@
 ---
-title: "DV 2"
-output: html_document
-date: "2024-05-09"
+title: "Delaware Valley MSA Urban Growth Model"
+author: "Lu Yii Wong & Javier Fernandez"
+date: "2024-05-10"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    code_download: true
 ---
 
 ```{r setup, include=FALSE}
@@ -90,7 +96,8 @@ rast <- function(inRaster) {
     value = getValues(inRaster)) }
 ```
 
-#set up
+# 1: Set up
+
 ```{r load_data, warning = FALSE, message = FALSE, results = "hide"}
 dvMSA <- 
   st_read("/Users/luyiiwong/Documents/Land Use & Environmental Modeling/Assignment5/dv_counties/dv_counties.shp") 
@@ -102,7 +109,7 @@ lc_change <- lc_2011+lc_2021
 
 ```
 
-## calculating land cover change
+# 2: Calculating Land Cover Change
 ```{r}
 #creating a matrix to classify urban and non-urban land use
 reclassMatrix <- 
@@ -147,7 +154,7 @@ ggplot() +
   mapTheme
 ```
 
-# creating the fishnet
+## 2.1: Creating the fishnet
 ```{r, warning = FALSE, message = FALSE}
 dvMSA_fishnet <- 
   st_make_grid(dvMSA, 500) %>%
@@ -189,7 +196,7 @@ ggplot() +
   mapTheme
 ```
 
-## 2.3. Land Cover in 2011
+## 2.2: Plotting Land Cover in 2011
 
 ```{r, warning = FALSE, message = FALSE}
 ggplot() +
@@ -230,6 +237,7 @@ names(water) <- "water"
 ```
 
 ```{r, warning = FALSE, message = FALSE}
+
 aggregateRaster <- function(inputRasterList, theFishnet) {
   #create an empty fishnet with the same dimensions as the input fishnet
   theseFishnets <- theFishnet %>% dplyr::select()
@@ -280,11 +288,12 @@ aggregatedRasters %>%
    mapTheme
 ```
 
-## 2.4. Census Data
-```{r}
+# 3: Pulling Demographic Data
+```{r message = FALSE, results='hide'}
 # setting up api key 
 census_api_key("b83a23afee4a8ed0fa131e449869e6577b87151e", overwrite = TRUE, install = TRUE)
 ```
+Delaware Valley MSA, Pennsylvania Counties:
 
 - Bucks County
 - Chester County
@@ -292,7 +301,7 @@ census_api_key("b83a23afee4a8ed0fa131e449869e6577b87151e", overwrite = TRUE, ins
 - Montgomery County
 - Philadelphia County
 
-```{r}
+```{r message = FALSE, results='hide'}
 # pulling data from census for 2011
 dvpop_2011 <- get_acs(geography = "tract", 
           variables = c("B01003_001E"), 
@@ -342,7 +351,7 @@ ggplot() +
 
 ```
 
-## interpolating population and fishnet
+## 3.1: Interpolating Population and Fishnet
 ```{r, warning = FALSE, message = FALSE}
 dvMSA_fishnet <-
   dvMSA_fishnet %>%
@@ -397,7 +406,7 @@ ggplot() +
   mapTheme, ncol=2)
 ```
 
-# Highway Distance
+# 4: Highway Distance
 ```{r, warning = FALSE, message = FALSE, results = "hide"}
 #dvHighways <-
 #  st_read("C:/Users/ferna/OneDrive/Documents/ArcGIS/Projects/CPLN 6750/HW5/dv_roads.geojson") %>%
@@ -410,7 +419,7 @@ dvHighways <-
   st_intersection(dvMSA)
 ```
 
-```{r plot_highway, warning = FALSE, message= FALSE}
+```{r warning = FALSE, message= FALSE}
 ggplot() +
   geom_point(data=fishnet, 
              aes(x=xyC(fishnet)[,1], y=xyC(fishnet)[,2],colour=layer),size=1.5) +
@@ -459,8 +468,8 @@ ggplot() +
   mapTheme
 ```
 
-#spatial lag
-``` {r}
+# 5: Spatial lag
+``` {r message = FALSE, results='hide', warning = FALSE}
 nn_function <- function(measureFrom,measureTo,k) {
   #convert the sf layers to matrices
   measureFrom_Matrix <-
@@ -484,7 +493,7 @@ nn_function <- function(measureFrom,measureTo,k) {
 }
 ```
 
-```{r}
+```{r message = FALSE, results='hide', warning = FALSE}
 fishnet$lagDevelopment <-
     nn_function(xyC(fishnet),
                 xyC(filter(aggregatedRasters,developed==1)),
@@ -506,7 +515,7 @@ hist(fishnet$lagDevelopment)
 # filter out og developed cells 
 ```
 
-# Create MSA Counties 
+# 6: Create MSA Counties 
 
 ```{r, warning = FALSE, message = FALSE, results = "hide"}
 options(tigris_class = "sf")
@@ -525,7 +534,7 @@ ggplot() +
   mapTheme
 ```
 
-#  Create the Final Dataset 
+# 7: Create the Final Dataset 
 Once we join the data set with out county boundaries, all the lc_change =1 is dropped
 ```{r}
 # can we go through this code - specifically the mutate function
@@ -540,7 +549,7 @@ dat <-
   filter(water == 0) 
 ```
 
-# Exploratroy Analysis
+# 8: Exploratroy Analysis
 It seems like land change only occured from undeveloped to water. Therefore, there is no new development...
 ```{r, warning = FALSE, message = FALSE}
 dat %>%
@@ -584,8 +593,7 @@ dat %>%
   kable() %>% kable_styling(full_width = F)
 ```
 
-# 4. Predicting for 2021
-## 4.2. Modeling
+# 9: Predicting for 2021 Model
 ```{r, warning = FALSE, message = FALSE}
 set.seed(3456)
 trainIndex <- 
@@ -595,7 +603,6 @@ trainIndex <-
 datTrain <- dat[ trainIndex,]
 datTest  <- dat[-trainIndex,]
 
-nrow(dat)
 ```
 
 ```{r, warning = FALSE, message = FALSE}
@@ -620,7 +627,7 @@ Model6 <- glm(layer ~ wetlands + forest  + farm + otherUndeveloped + lagDevelopm
               family="binomial"(link="logit"), data = datTrain) 
 ```
 
-```{r, warning = FALSE, message = FALSE}
+```{r, warning = FALSE, message = FALSE, results='hide'}
 modelList <- paste0("Model", 1:6)
 map_dfc(modelList, function(x)pR2(get(x)))[4,] %>%
   setNames(paste0("Model",1:6)) %>%
@@ -645,7 +652,7 @@ ggplot(testSetProbs, aes(probs)) +
   plotTheme
 ```
 
-## 4.3. Accuracy
+## 9.1: Accuracy
 ```{r, warning = FALSE, message = FALSE}
 options(yardstick.event_first = FALSE)
 
@@ -710,76 +717,9 @@ ggplot(data=ConfusionMatrix.metrics) +
                        name="") +
   labs(title="Development Predictions - Low Threshold") + mapTheme
 ```
-# CV is optional
-## 4.4 Generalizability
-```{r, warning = FALSE, message = FALSE}
-spatialCV <- function(dataFrame, uniqueID, dependentVariable, modelName) {
 
-#initialize a data frame 
-endList <- list()
 
-#create a list that is all the spatial group unqiue ids in the data frame (ie counties)    
-  uniqueID_List <- unique(dataFrame[[uniqueID]])  
-  x <- 1
-  y <- length(uniqueID_List)
-  
-#create a counter and while it is less than the number of counties...  
-  while(x <= y) 
-  {
-#call a current county    
-    currentUniqueID <- uniqueID_List[x]
-#create a training set comprised of units not in that county and a test set of units
-#that are that county
-    training <- dataFrame[ which(dataFrame[[uniqueID]] != uniqueID_List[x]),]
-    testing <- dataFrame[ which(dataFrame[[uniqueID]] == uniqueID_List[x]),]
-#create seperate xy vectors
-    trainingX <- training[ , -which(names(training) %in% c(dependentVariable))]
-    testingX <- testing[ , -which(names(testing) %in% c(dependentVariable))]
-    
-    trainY <- training[[dependentVariable]]
-    testY <- testing[[dependentVariable]]
-#Calculate predictions on the test county as part of a data frame including the observed
-#outcome and the unique county ID    
-   thisPrediction <- 
-     data.frame(class = testY,
-                probs = predict(modelName, testingX, type="response"),
-                county = currentUniqueID) 
-
-#Row bind the predictions to a data farme
-   endList <- rbind(endList, thisPrediction)
-#iterate counter    
-    x <- x + 1 
-  } 
-#return the final list of counties and associated predictions  
-  return (as.data.frame(endList))
-}
-```
-
-# STUCK HERE 
-```{r, warning = FALSE, message = FALSE}
-options(yardstick.event_first = FALSE)
-
-#Not sure what this error means?
-spatialCV_counties <-
-  spatialCV(as.data.frame(dat),"NAME","layer", Model3) %>%
-  mutate(predClass = as.factor(ifelse(probs >= 0.17 ,1,0)))
-```
-
-```{r, warning = FALSE, message = FALSE}
-spatialCV_metrics <-
-  spatialCV_counties %>% 
-    group_by(county) %>% 
-    summarize(Observed_Change = sum(as.numeric(as.character(class))),
-              Sensitivity = round(yardstick::sens_vec(class,predClass),2),
-              Specificity = round(yardstick::spec_vec(class,predClass),2),
-              Accuracy = round(yardstick::accuracy_vec(class,predClass),2)) 
-
-spatialCV_metrics %>%
-  kable() %>%
-  kable_styling(full_width = F)
-```
-
-# 5. Predicting Land Cover Demand for 2031
+# 10: Predicting Land Cover Demand for 2031
 ```{r, warning = FALSE, message = FALSE}
 dat <-
   dat %>%
@@ -814,7 +754,7 @@ countyPopulation_2031 %>%
   plotTheme
 ```
 
-## 5.2. Predicting Development Demand
+## 10.1: Predicting Development Demand
 ```{r, warning = FALSE, message = FALSE}
 # section edited
 dat_infill <-
@@ -840,8 +780,8 @@ dat_infill %>%
   mapTheme
 ```
 
-# 6. Comparing Predicted Development Demand & Environmental Sensitivity
-## 6.2. 2021 Land Cover Data
+# 11: Comparing Predicted Development Demand & Environmental Sensitivity
+## 11.2: 2021 Land Cover Data
 ```{r, warning = FALSE, message = FALSE}
 developed21 <- lc_2021 == 21 | lc_2021 == 22 | lc_2021 == 23 | lc_2021 == 24
 forest21 <- lc_2021 == 41 | lc_2021 == 42 | lc_2021 == 43 
@@ -897,9 +837,9 @@ dat2 %>%
    mapTheme
 ```
 
-## 6.3. Sensitive Land Cover Lost
+## 11.3: Sensitive Land Cover Lost
 
-```{r, warning = FALSE, message = FALSE, fig.height = 6, fig.width= 6}
+```{r, warning = FALSE, message = FALSE}
 dat2 <-
   dat2 %>%
    mutate(sensitive_lost21 = ifelse(forest == 1 & forest21 == 0 |
@@ -915,7 +855,7 @@ ggplot() +
   mapTheme
 ```
 
-## 6.4 Landscape Fragmentation
+## 11.4: Landscape Fragmentation
 
 ```{r, warning = FALSE, message = FALSE, fig.height = 6, fig.width= 6}
 sensitiveRegions <- 
@@ -948,7 +888,7 @@ ggplot() +
   mapTheme
 ```
 
-## 6.5. Summarize by County
+## 11.5: Summarize by County
 ```{r, warning = FALSE, message = FALSE}
 county_specific_metrics <- 
   dat2 %>%
@@ -995,7 +935,7 @@ county_specific_metrics %>%
     plotTheme + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position="bottom")
 ```
 
-# 7. Allocation
+# 12: Scenario 1: Allocation
 ```{r, warning = FALSE, message = FALSE, fig.height= 8, fig.width= 11}
 chester <-
   dat2 %>%
@@ -1034,4 +974,173 @@ ggplot() +
   guides(fill = guide_legend(order = 1), colour = guide_legend(order = 2)), ncol=2)
 ```
 
+# 13: Scenario 2 Transportation
+## 13.1: Highway Distance
+```{r, warning = FALSE, message = FALSE, results = "hide"}
+#dvHighways <-
+#  st_read("C:/Users/ferna/OneDrive/Documents/ArcGIS/Projects/CPLN 6750/HW5/dv_roads.geojson") %>%
+#  st_transform(st_crs(dvMSA)) %>%
+#  st_intersection(dvMSA)
 
+dvTransit <-
+  st_read("/Users/luyiiwong/Documents/GitHub/LandUseModeling_HW5/DelawareValley/dv_transit.geojson") %>%
+  st_transform(st_crs(dvMSA)) %>%
+  st_intersection(dvMSA)
+```
+
+```{r warning = FALSE, message= FALSE}
+ggplot() +
+  geom_point(data=fishnet, 
+             aes(x=xyC(fishnet)[,1], y=xyC(fishnet)[,2],colour=layer),size=1.5) +
+  geom_sf(data=dvTransit) +
+  scale_colour_manual(values = palette2,
+                      labels=c("No Change","N`w Development")) +
+  labs(title = "New Development and New Transit",
+       subtitle = "As fishnet centroids") +
+  mapTheme
+```
+```{r, warning = FALSE, message = FALSE}
+emptyRaster <- lc_change
+emptyRaster[] <- NA
+
+dvTransit_spdf <- as(dvTransit, "Spatial")
+transit_raster <- rasterize(dvTransit, emptyRaster)
+
+#highway_raster <- 
+  #as(dvTransit,'Spatial') %>%
+  #rasterize(.,emptyRaster)
+
+transit_raster_distance <- distance(transit_raster)
+names(transit_raster_distance) <- "distance_transit"
+
+transitPoints <-
+  rasterToPoints(transit_raster_distance) %>%
+  as.data.frame() %>%
+  st_as_sf(coords = c("x", "y"), crs = st_crs(dvMSA_fishnet))
+
+transitPoints_fishnet <- 
+  aggregate(transitPoints, dvMSA_fishnet, mean) %>%
+  mutate(distance_transit = ifelse(is.na(distance_transit),0,distance_transit))
+
+ggplot() +
+  geom_sf(data=dvMSA) +
+  geom_point(data=transitPoints_fishnet, aes(x=xyC(transitPoints_fishnet)[,1], 
+                                             y=xyC(transitPoints_fishnet)[,2], 
+                 colour=factor(ntile(distance_transit,5))),size=1.5) +
+  scale_colour_manual(values = palette5,
+                      labels=substr(quintileBreaks(transitPoints_fishnet,"distance_transit"),1,8),
+                      name="Quintile/nBreaks") +
+  geom_sf(data=dvTransit, colour = "red") +
+  labs(title = "Distance to transit",
+       subtitle = "As fishnet centroids; transit visualized in red") +
+  mapTheme
+```
+
+## 13.2: Create a new dataset for the model
+changing the distance from highway to distance to transit
+```{r}
+dat.2 <- 
+  cbind(fishnet, transitPoints_fishnet, fishnetPopulation, aggregatedRasters)%>%
+  dplyr::select(layer, developed, forest, farm, wetlands, otherUndeveloped, water,
+                pop_2011, pop_2021, pop_Change, distance_transit,lagDevelopment) %>%
+  st_join(studyAreaCounties) %>%
+  mutate(developed10 = ifelse(layer == 1 & developed == 1, 0, developed)) %>%
+  filter(water == 0) 
+```
+
+## 13.3: Create training set
+```{r, warning = FALSE, message = FALSE}
+set.seed(3456)
+trainIndex <- 
+  createDataPartition(dat$developed, p = .50,
+                                  list = FALSE,
+                                  times = 1)
+transit.datTrain <- dat.2[ trainIndex,]
+transit.datTest  <- dat.2[-trainIndex,]
+
+```
+
+```{r, warning = FALSE, message = FALSE}
+# test model with transit
+transitModel <- glm(layer ~ wetlands + forest  + farm + otherUndeveloped + lagDevelopment + pop_Change + 
+              distance_transit, 
+              family="binomial"(link="logit"), data = transit.datTrain) 
+summary(transitModel)
+#variables are highly significant
+#r-square value: 14.8%
+```
+
+```{r, warning = FALSE, message = FALSE}
+testSetProbs.2 <- 
+  data.frame(class = datTest$layer,
+             probs = predict(transitModel, transit.datTest, type="response")) 
+  
+ggplot(testSetProbs.2, aes(probs)) +
+  geom_density(aes(fill=class), alpha=0.5) +
+  scale_fill_manual(values = palette2,
+                    labels=c("No Change","New Development")) +
+  labs(title = "Histogram of test set predicted probabilities",
+       x="Predicted Probabilities",y="Density") +
+  plotTheme
+```
+
+## 13.4: Creating new dataframe for pop projection
+```{r, warning = FALSE, message = FALSE}
+dat.new <-
+  aggregateRaster(theRasterList21, dat.2) %>%
+  dplyr::select(developed21,forest21,farm21,wetlands21,otherUndeveloped21,water21) %>%
+  st_set_geometry(NULL) %>%
+  bind_cols(.,dat.2) %>%
+  st_sf() %>%
+  st_cast("POLYGON")
+
+# considering land fragmentation
+dat.new <-
+  aggregateRaster(c(sensitiveRegions), dat.new) %>%
+  dplyr::select(sensitiveRegions) %>%
+  st_set_geometry(NULL) %>%
+  bind_cols(.,dat.2) %>%
+  st_sf()
+
+```
+
+## 13.5: Land allocation - population projection and development forcast
+```{r, warning = FALSE, message = FALSE, fig.height= 8, fig.width= 11}
+chester.new <-
+  dat.new %>%
+    mutate(Development_Demand = predict(transitModel, dat.new, type="response")) %>%
+    filter(NAME == "Chester") 
+
+chester_landUse.new <- rbind(
+  filter(chester, forest21 == 1 | wetlands21 == 1 ) %>%
+  dplyr::select() %>% mutate(Land_Use = "Not Suitable"),
+  filter(chester, developed21 == 1) %>%
+  dplyr::select() %>% mutate(Land_Use = "Developed"))
+
+grid.arrange(
+ggplot() +
+  geom_sf(data=chester.new, aes(fill=factor(ntile(Development_Demand,5))), colour=NA) +
+  geom_point(data=chester_landUse.new, aes(x=xyC(chester_landUse.new)[,1], 
+                                        y=xyC(chester_landUse.new)[,2], colour=Land_Use),
+                                        shape = 15, size = 2) +
+  geom_sf(data=st_intersection(dvHighways,filter(studyAreaCounties, NAME=="Chester")), size=2) +
+  scale_fill_manual(values = palette5, name="Development\nDemand",
+                    labels=substr(quintileBreaks(chester.new,"Development_Demand"),1,5)) +
+  scale_colour_manual(values = c("black","red")) + 
+  labs(title = "Development Potential, 2031: Chester",
+       subtitle = "Additional Transit") + mapTheme +
+  guides(fill = guide_legend(order = 1), colour = guide_legend(order = 2)),
+
+ggplot() +
+  geom_sf(data=chester.new, aes(fill=factor(ntile(pop_Change,5))), colour=NA) +
+  geom_point(data=chester_landUse.new, aes(x=xyC(chester_landUse.new)[,1], 
+                                        y=xyC(chester_landUse.new)[,2], colour=Land_Use),
+                                        shape = 15, size = 2) +
+  geom_sf(data=st_intersection(dvHighways,filter(studyAreaCounties, NAME=="Chester")), size=2) +
+  scale_fill_manual(values = palette5, name="Population\nChange",
+                    labels=substr(quintileBreaks(chester.new,"pop_Change"),1,5)) +
+  scale_colour_manual(values = c("black","red")) + 
+  labs(title = "Projected Population, 2031: Chester",
+       subtitle = "Additional Transit") + mapTheme +
+  guides(fill = guide_legend(order = 1), colour = guide_legend(order = 2)), ncol=2)
+```
