@@ -792,8 +792,8 @@ countyPopulation_2031 <-
   data.frame(
    NAME = 
      c("Philadelphia","Chester","Montgomery","Bucks","Delaware"),
-   county_projection_2020 = 
-     c(888595,32428,58002,335006,4885616,90780,47621,410571,36542,660481)) %>%
+   county_projection_2031 = 
+     c(1643971, 599932, 884387, 669299, 577248)) %>%
   #CHANGE LINE ABOVE - from a study DVRPC population projection
    left_join(
      dat %>%
@@ -806,7 +806,7 @@ countyPopulation_2031 %>%
   ggplot(aes(reorder(NAME,-Value),Value)) +
   geom_bar(aes(fill=Variable), stat = "identity", position = "dodge") +
   scale_fill_manual(values = palette2,
-                    labels=c("2031","2021"),
+                    labels=c("2021","2031"),
                     name="Population") +
   labs(title="Population Change by County: 2021 - 2031",
        x="County", y="Population") +
@@ -822,7 +822,7 @@ dat_infill <-
   #calculate population change
     left_join(countyPopulation_2031) %>%
     mutate(proportion_of_county_pop = pop_2021 / county_population_2021,
-           pop_2020.infill = proportion_of_county_pop * county_projection_2031,
+           pop_2031.infill = proportion_of_county_pop * county_projection_2031,
            pop_Change = round(pop_2031.infill - pop_2021),2) %>%
     dplyr::select(-county_projection_2031, -county_population_2021, 
                   -proportion_of_county_pop, -pop_2031.infill) %>%
@@ -869,31 +869,30 @@ ggplot() +
   mapTheme + theme(legend.position = "none")
 ```
 
-# STOPPED HERE
 ```{r, warning = FALSE, message = FALSE}
-theRasterList11 <- c(developed11,forest11,farm11,wetlands11,otherUndeveloped11,water11)
+theRasterList21 <- c(developed21,forest21,farm21,wetlands21,otherUndeveloped21,water21)
 
 dat2 <-
-  aggregateRaster(theRasterList11, dat) %>%
-  dplyr::select(developed11,forest11,farm11,wetlands11,otherUndeveloped11,water11) %>%
+  aggregateRaster(theRasterList21, dat) %>%
+  dplyr::select(developed21,forest21,farm21,wetlands21,otherUndeveloped21,water21) %>%
   st_set_geometry(NULL) %>%
   bind_cols(.,dat) %>%
   st_sf() %>%
   st_cast("POLYGON")
 
 dat2 %>%
-  gather(var,value,developed11:water11) %>%
+  gather(var,value,developed21:water21) %>%
   st_centroid() %>%
   mutate(X = st_coordinates(.)[,1],
          Y = st_coordinates(.)[,2]) %>%
   ggplot() +
-    geom_sf(data=houstonMSA) +
+    geom_sf(data=dvMSA) +
     geom_point(aes(X,Y, colour=as.factor(value))) +
     facet_wrap(~var) +
     scale_colour_manual(values = palette2,
                         labels=c("Other","Land Cover"),
                         name = "") +
-    labs(title = "Land Cover Types, 2011",
+    labs(title = "Land Cover Types, 2021",
          subtitle = "As fishnet centroids") +
    mapTheme
 ```
@@ -903,15 +902,15 @@ dat2 %>%
 ```{r, warning = FALSE, message = FALSE, fig.height = 6, fig.width= 6}
 dat2 <-
   dat2 %>%
-   mutate(sensitive_lost11 = ifelse(forest == 1 & forest11 == 0 |
-                                    wetlands == 1 & wetlands11 == 0,1,0))
+   mutate(sensitive_lost21 = ifelse(forest == 1 & forest21 == 0 |
+                                    wetlands == 1 & wetlands21 == 0,1,0))
                       
 ggplot() +
-  geom_point(data=dat2, aes(x=xyC(dat2)[,1], y=xyC(dat2)[,2], colour=as.factor(sensitive_lost11))) +
+  geom_point(data=dat2, aes(x=xyC(dat2)[,1], y=xyC(dat2)[,2], colour=as.factor(sensitive_lost21))) +
   scale_colour_manual(values = palette2,
                       labels=c("No Change","Sensitive Lost"),
                       name = "") +
-  labs(title = "Sensitive lands lost: 2001 - 2011",
+  labs(title = "Sensitive lands lost: 2011 - 2021",
        subtitle = "As fishnet centroids") +
   mapTheme
 ```
@@ -920,7 +919,7 @@ ggplot() +
 
 ```{r, warning = FALSE, message = FALSE, fig.height = 6, fig.width= 6}
 sensitiveRegions <- 
-  raster::clump(wetlands11 + forest11) %>%
+  raster::clump(wetlands21 + forest21) %>%
   rasterToPolygons() %>%
   st_as_sf() %>%
   group_by(clumps) %>% 
@@ -959,18 +958,19 @@ county_specific_metrics <-
   left_join(st_set_geometry(dat, NULL) %>% group_by(NAME) %>% summarize(count = n())) %>%
   #calculate summary statistics by county
   group_by(NAME) %>%
-  summarize(Total_Farmland = sum(farm11) / max(count),
-            Total_Forest = sum(forest11) / max(count),
-            Total_Wetlands = sum(wetlands11) / max(count),
-            Total_Undeveloped = sum(otherUndeveloped11) / max(count),
-            Sensitive_Land_Lost = sum(sensitive_lost11) / max(count),
+  summarize(Total_Farmland = sum(farm21) / max(count),
+            Total_Forest = sum(forest21) / max(count),
+            Total_Wetlands = sum(wetlands21) / max(count),
+            Total_Undeveloped = sum(otherUndeveloped21) / max(count),
+            Sensitive_Land_Lost = sum(sensitive_lost21) / max(count),
             Sensitive_Regions = sum(sensitiveRegions) / max(count),
             Mean_Development_Demand = mean(Development_Demand)) %>%
   #get population data by county
-  left_join(countyPopulation_2020 %>% 
-            mutate(Population_Change = county_projection_2020 - county_population_2010,
-                   Population_Change_Rate = Population_Change / county_projection_2020) %>%
-            dplyr::select(NAME,Population_Change_Rate))
+  left_join(countyPopulation_2031 %>% 
+            mutate(Population_Change = county_projection_2031 - county_population_2021,
+                   Population_Change_Rate = Population_Change / county_projection_2031) %>%
+            dplyr::select(NAME,Population_Change_Rate)) %>%
+  na.omit()
 ```
 
 ```{r, warning = FALSE, message = FALSE}
@@ -997,40 +997,40 @@ county_specific_metrics %>%
 
 # 7. Allocation
 ```{r, warning = FALSE, message = FALSE, fig.height= 8, fig.width= 11}
-fortBend <-
+chester <-
   dat2 %>%
     mutate(Development_Demand = predict(Model6, dat2, type="response")) %>%
-    filter(NAME == "Fort Bend") 
+    filter(NAME == "Chester") 
 
-fortBend_landUse <- rbind(
-  filter(fortBend, forest11 == 1 | wetlands11 == 1 ) %>%
+chester_landUse <- rbind(
+  filter(chester, forest21 == 1 | wetlands21 == 1 ) %>%
   dplyr::select() %>% mutate(Land_Use = "Not Suitable"),
-  filter(fortBend, developed11 == 1) %>%
+  filter(chester, developed21 == 1) %>%
   dplyr::select() %>% mutate(Land_Use = "Developed"))
 
 grid.arrange(
 ggplot() +
-  geom_sf(data=fortBend, aes(fill=factor(ntile(Development_Demand,5))), colour=NA) +
-  geom_point(data=fortBend_landUse, aes(x=xyC(fortBend_landUse)[,1], 
-                                        y=xyC(fortBend_landUse)[,2], colour=Land_Use),
+  geom_sf(data=chester, aes(fill=factor(ntile(Development_Demand,5))), colour=NA) +
+  geom_point(data=chester_landUse, aes(x=xyC(chester_landUse)[,1], 
+                                        y=xyC(chester_landUse)[,2], colour=Land_Use),
                                         shape = 15, size = 2) +
-  geom_sf(data=st_intersection(houstonHighways,filter(studyAreaCounties, NAME=="Fort Bend")), size=2) +
+  geom_sf(data=st_intersection(dvHighways,filter(studyAreaCounties, NAME=="Chester")), size=2) +
   scale_fill_manual(values = palette5, name="Development\nDemand",
-                    labels=substr(quintileBreaks(fortBend,"Development_Demand"),1,5)) +
+                    labels=substr(quintileBreaks(chester,"Development_Demand"),1,5)) +
   scale_colour_manual(values = c("black","red")) + 
-  labs(title = "Development Potential, 2020: Fort Bend") + mapTheme +
+  labs(title = "Development Potential, 2031: Chester") + mapTheme +
   guides(fill = guide_legend(order = 1), colour = guide_legend(order = 2)),
 
 ggplot() +
-  geom_sf(data=fortBend, aes(fill=factor(ntile(pop_Change,5))), colour=NA) +
-  geom_point(data=fortBend_landUse, aes(x=xyC(fortBend_landUse)[,1], 
-                                        y=xyC(fortBend_landUse)[,2], colour=Land_Use),
+  geom_sf(data=chester, aes(fill=factor(ntile(pop_Change,5))), colour=NA) +
+  geom_point(data=chester_landUse, aes(x=xyC(chester_landUse)[,1], 
+                                        y=xyC(chester_landUse)[,2], colour=Land_Use),
                                         shape = 15, size = 2) +
-  geom_sf(data=st_intersection(houstonHighways,filter(studyAreaCounties, NAME=="Fort Bend")), size=2) +
+  geom_sf(data=st_intersection(dvHighways,filter(studyAreaCounties, NAME=="Chester")), size=2) +
   scale_fill_manual(values = palette5, name="Population\nChange",
-                    labels=substr(quintileBreaks(fortBend,"pop_Change"),1,5)) +
+                    labels=substr(quintileBreaks(chester,"pop_Change"),1,5)) +
   scale_colour_manual(values = c("black","red")) + 
-  labs(title = "Projected Population, 2020: Fort Bend") + mapTheme +
+  labs(title = "Projected Population, 2031: Chester") + mapTheme +
   guides(fill = guide_legend(order = 1), colour = guide_legend(order = 2)), ncol=2)
 ```
 
